@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react'
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import {
   ViewerApp,
   AssetManagerPlugin,
@@ -17,23 +17,59 @@ import { scrollAnimation } from '../lib/scroll-animation';
 
 gsap.registerPlugin(ScrollTrigger)
 
-export const WebgiViewer = () => {
+export const WebgiViewer = forwardRef((props, ref) => {
   const canvasRef = useRef(null);
+  const canvasContainerRef = useRef(null)
+  const [viewerRef, setViewerRef] = useState(null)
+  const [targetRef, setTargetRef] = useState(null)
+  const [cameraRef, setCameraRef] = useState(null)
+  const [positionRef, setPositionRef] = useState(null)
+  const [previewMode, setPreviewMode] = useState(false) 
+
+  useImperativeHandle(
+    ref, () => ({
+      triggerPreview() {
+
+        setPreviewMode(true)
+        canvasContainerRef.current.style.pointerEnvents = 'all'
+        props.contentRef.current.style.opacity = '0';
+
+        gsap.to(positionRef, {
+          x: 13.04,
+          y: -2.01,
+          z: 2.29,
+          duration: 2,
+          onUpdate: () => {
+            viewerRef.setDirty()
+            cameraRef.positionTargetUpdated(true)
+          }
+        })
+        gsap.to(targetRef, { x: 0.11, y: 0.0, z: 0.0, duration: 2 })
+      }
+    }))
 
   const memoizedScrollAnimation = useCallback((position, target, onUpdate) => {
-    if(position && target && onUpdate) {
+    if (position && target && onUpdate) {
       scrollAnimation(position, target, onUpdate)
     }
-  },[])
+  }, [])
 
   const setupViewer = useCallback(async () => {
     const viewer = new ViewerApp({
       canvas: canvasRef.current,
     })
+
+    setViewerRef(viewer);
+
     const manager = await viewer.addPlugin(AssetManagerPlugin)
+
     const camera = viewer.scene.activeCamera;
     const position = camera.position
     const target = camera.target
+
+    setCameraRef(camera)
+    setPositionRef(position)
+    setTargetRef(target)
 
     await viewer.addPlugin(GBufferPlugin)
     await viewer.addPlugin(new ProgressivePlugin(32))
@@ -54,9 +90,9 @@ export const WebgiViewer = () => {
       needsUpdate = true;
       viewer.setDirty()
     }
-    
+
     viewer.addEventListener('preFrame', () => {
-      if(needsUpdate){
+      if (needsUpdate) {
         camera.positionTargetUpdated(true)
         needsUpdate = false;
       }
@@ -70,8 +106,15 @@ export const WebgiViewer = () => {
   }, [])
 
   return (
-    <div id='webgi-canvas-container'>
-      <canvas id='webgi-canvas' ref={canvasRef}></canvas>
+    <div ref={canvasContainerRef} id='webgi-canvas-container'>
+      <canvas id='webgi-canvas' ref={canvasRef}>
+        {
+          previewMode && (
+            <button className='button'>Exit</button>
+          )
+        }
+      </canvas>
     </div>
   )
-}
+})
+
